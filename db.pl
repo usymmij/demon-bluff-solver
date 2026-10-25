@@ -3,6 +3,8 @@
 % TODO: use deck to count cards, count duplicates
 % TODO: add corrupted alignment
 % TODO: Evil != Lying
+% TODO: Add interactive cards
+% TODO: add roles
 
 alignments([good, evil]).
 
@@ -28,7 +30,7 @@ gemcrafterClue([Alignment, Pos, GoodPos]) :- isGood(Pos, Alignment), isGood(Good
 gemcrafterClue([Alignment, Pos, GoodPos]) :- isEvil(Pos, Alignment), isEvil(GoodPos, Alignment). 
 
 % lover counts the adjacent evils
-loverClue_([Alignment, Pos, AdjEvils]) :-
+loverClue_(Alignment, Pos, AdjEvils) :-
     alignments(Alignments),
     maplist(member, [A,B], [Alignments, Alignments]),
     length(Alignment, NCards),
@@ -39,19 +41,13 @@ loverClue_([Alignment, Pos, AdjEvils]) :-
     count_evil([A,B], AdjEvils).
 loverClue([Alignment, Pos, AdjEvils]) :- 
     isGood(Pos, Alignment),
-    loverClue_([Alignment, Pos, AdjEvils]).
+    loverClue_(Alignment, Pos, AdjEvils).
 loverClue([Alignment, Pos, AdjEvils]) :-
     isEvil(Pos, Alignment),
-    loverClue_([Alignment, Pos, EvilCount]),
+    loverClue_(Alignment, Pos, EvilCount),
     dif(EvilCount, AdjEvils).
 
-n_factorial(0, 1).
-n_factorial(N, F) :-
-        N #> 0,
-        N1 #= N - 1,
-        F #= N * F1,
-        n_factorial(N1, F1).
-
+% Rotate through, checking for closest evil in direction Dir
 enlightenedClueRot(Alignment, NCards, Pos, Start, 1, Dir) :-
     TestPos #= (Pos + (Start * Dir)) mod NCards,
     isEvil(TestPos, Alignment).
@@ -62,21 +58,53 @@ enlightenedClueRot(Alignment, NCards, Pos, Start, N, Dir) :-
     Start1 #= Start + 1,
     enlightenedClueRot(Alignment, NCards, Pos, Start1, N1, Dir),
     N is N1 + 1.
+% enlightened clue is -1,0,or 1
 enlightenedClueDir(1, CW, CCW) :- CW #< CCW.
 enlightenedClueDir(0, CW, CCW) :- CW #= CCW.
 enlightenedClueDir(-1, CW, CCW) :- CW #> CCW.
+% check both directions
 enlightenedClueCk(Alignment, Pos, Rot) :- 
     length(Alignment, NCards), 
     enlightenedClueRot(Alignment, NCards, Pos, 1, CW, 1), 
     enlightenedClueRot(Alignment, NCards, Pos, 1, CCW, -1),
     enlightenedClueDir(Rot, CW, CCW).
+% clue is T/F based on alignment
 enlightenedClue([Alignment, Pos, Rot]) :- 
     isGood(Pos, Alignment),
     enlightenedClueCk(Alignment, Pos, Rot).
 enlightenedClue([Alignment, Pos, Rot]) :- 
-    isEvil(Pos, Alignment);
+    isEvil(Pos, Alignment),
     enlightenedClueCk(Alignment, Pos, NRot),
     dif(NRot, Rot).
+
+% TODO: include role in this clue, same as gemcrafter currently
+mediumClue([Alignment, Pos, GoodPos]) :- isGood(Pos, Alignment), isGood(GoodPos, Alignment). 
+mediumClue([Alignment, Pos, GoodPos]) :- isEvil(Pos, Alignment), isEvil(GoodPos, Alignment). 
+
+hunterClue_(Alignment, Pos, NCards, Distance, Distance, Dir) :-
+    TestPos #= (Pos + (Distance * Dir)) mod NCards,
+    isEvil(TestPos, Alignment).
+hunterClue_(Alignment, Pos, NCards, Distance, Steps, Dir) :-
+    member(Dir, [-1,1]),
+    Steps #< Distance,
+    TestPos #= (Pos + (Steps * Dir)) mod NCards,
+    isGood(TestPos, Alignment),
+    NextStep #= Steps + 1,
+    hunterClue_(Alignment, Pos, NCards, Distance, NextStep, Dir).
+hunterClue([Alignment, Pos, Distance]) :- 
+    isGood(Pos, Alignment),
+    length(Alignment, NCards),
+    (
+        hunterClue_(Alignment, Pos, NCards, Distance, 1, 1);
+        hunterClue_(Alignment, Pos, NCards, Distance, 1, -1)
+    ).
+hunterClue([Alignment, Pos, Distance]) :- 
+    isEvil(Pos, Alignment),
+    length(Alignment, NCards),
+    \+ (
+        hunterClue_(Alignment, Pos, NCards, Distance, 1, 1);
+        hunterClue_(Alignment, Pos, NCards, Distance, 1, -1)
+    ).
 
 inDeck([], _).
 inDeck([A|As], Deck) :-
@@ -108,17 +136,17 @@ db_solver(Sums, Clues, Alignment) :-
     .
 
 /*
- Problem definition before solution
+ Problem definition before query
 */
 
-sums([4,0,1,0]).
+sums([5,0,1,0]).
 clues([
-[enlightenedClue, 0, 1],
-[gemcrafterClue, 1, 1],
-[gemcrafterClue, 2, 3],
-[loverClue, 3, 0],
-[confessorClue, 3, notdizzy]
-
+[gemcrafterClue, 0, 3],
+[loverClue, 1, 1],
+[confessorClue, 2, notdizzy],
+[hunterClue, 3, 2],
+[mediumClue, 4, 0],
+[enlightenedClue, 5, 1]
 ]).
 
 
